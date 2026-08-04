@@ -5,9 +5,9 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
+from flask import Flask
 from sqlalchemy import event
 from sqlalchemy.orm import Session
-from flask import Flask
 from werkzeug.datastructures import FileStorage
 
 from core.entities.knowledge_entities import PreviewDetail
