@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
 from datetime import datetime
 from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 from flask import Flask
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from controllers.common.errors import NotFoundError
@@ -21,12 +19,6 @@ from graphon.enums import WorkflowExecutionStatus
 from models.enums import CreatorUserRole, WorkflowRunTriggeredFrom
 from models.workflow import WorkflowPause, WorkflowRun, WorkflowType
 from tests.unit_tests.config_override import apply_config_overrides
-
-
-@dataclass(frozen=True)
-class _Database:
-    engine: Engine
-    session: Session
 
 
 def _persist_run(
@@ -89,12 +81,6 @@ def test_pause_details_returns_backstage_input_url(
         status=WorkflowExecutionStatus.PAUSED,
         paused=True,
     )
-    monkeypatch.setattr(
-        workflow_run_module,
-        "db",
-        _Database(engine=sqlite_session.get_bind(), session=sqlite_session),
-    )
-
     reason = HumanInputRequired(
         form_id="form-1",
         form_content="content",
@@ -122,6 +108,7 @@ def test_pause_details_returns_backstage_input_url(
         handler = inspect.unwrap(workflow_run_module.ConsoleWorkflowPauseDetailsApi.get)
         response, status = handler(
             workflow_run_module.ConsoleWorkflowPauseDetailsApi(),
+            sqlite_session,
             tenant_id,
             workflow_run_id=run_id,
         )
@@ -148,25 +135,18 @@ def test_pause_details_tenant_isolation(app: Flask, monkeypatch: pytest.MonkeyPa
         status=WorkflowExecutionStatus.PAUSED,
         paused=True,
     )
-    monkeypatch.setattr(
-        workflow_run_module,
-        "db",
-        _Database(engine=sqlite_session.get_bind(), session=sqlite_session),
-    )
-
     handler = inspect.unwrap(workflow_run_module.ConsoleWorkflowPauseDetailsApi.get)
     with app.test_request_context(f"/console/api/workflow/{run_id}/pause-details", method="GET"):
         with pytest.raises(NotFoundError):
             handler(
                 workflow_run_module.ConsoleWorkflowPauseDetailsApi(),
+                sqlite_session,
                 str(uuid4()),
                 workflow_run_id=run_id,
             )
 
 
-def test_pause_details_returns_empty_response_for_non_paused_run(
-    app: Flask, monkeypatch: pytest.MonkeyPatch, sqlite_session: Session
-) -> None:
+def test_pause_details_returns_empty_response_for_non_paused_run(app: Flask, sqlite_session: Session) -> None:
     tenant_id = str(uuid4())
     run_id = str(uuid4())
     _persist_run(
@@ -175,16 +155,11 @@ def test_pause_details_returns_empty_response_for_non_paused_run(
         tenant_id=tenant_id,
         status=WorkflowExecutionStatus.RUNNING,
     )
-    monkeypatch.setattr(
-        workflow_run_module,
-        "db",
-        _Database(engine=sqlite_session.get_bind(), session=sqlite_session),
-    )
-
     with app.test_request_context(f"/console/api/workflow/{run_id}/pause-details", method="GET"):
         handler = inspect.unwrap(workflow_run_module.ConsoleWorkflowPauseDetailsApi.get)
         response, status = handler(
             workflow_run_module.ConsoleWorkflowPauseDetailsApi(),
+            sqlite_session,
             tenant_id,
             workflow_run_id=run_id,
         )
