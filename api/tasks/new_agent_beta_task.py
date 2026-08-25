@@ -149,7 +149,7 @@ def ensure_new_agent_beta_participation_task(self, source_id: str, source_type: 
 
 def schedule_new_agent_beta_ensure(revision_id: str) -> None:
     try:
-        ensure_new_agent_beta_participation_task.delay(revision_id)
+        ensure_new_agent_beta_participation_task.delay(revision_id, "revision")
     except Exception:
         logger.exception("Failed to dispatch New Agent Beta eligibility task, revision_id=%s", revision_id)
 
