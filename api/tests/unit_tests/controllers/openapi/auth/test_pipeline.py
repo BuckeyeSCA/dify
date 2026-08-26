@@ -18,7 +18,6 @@ def _make_identity(
     token_hash="testhash",
     subject_email=None,
     subject_issuer=None,
-    verified_tenants=None,
     token_id=None,
 ):
     identity = MagicMock()
@@ -28,7 +27,6 @@ def _make_identity(
     identity.token_hash = token_hash
     identity.subject_email = subject_email
     identity.subject_issuer = subject_issuer
-    identity.verified_tenants = verified_tenants or {}
     identity.token_id = token_id or uuid.uuid4()
     return identity
 
