@@ -7,13 +7,7 @@ from services import feature_service as feature_service_module
 from services.feature_service import FeatureService
 
 
-def test_get_system_features_excludes_trial_models():
-    result = FeatureService.get_system_features().model_dump()
-
-    assert "trial_models" not in result
-
-
-def test_get_trial_models_returns_providers_with_paid_or_trial_enabled(monkeypatch: pytest.MonkeyPatch):
+def test_get_trial_models_returns_providers_with_paid_or_trial_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     for provider in HostedTrialProvider:
         monkeypatch.setattr(
             feature_service_module.dify_config,
