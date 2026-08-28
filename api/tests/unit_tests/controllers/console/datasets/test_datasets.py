@@ -271,14 +271,14 @@ class TestDatasetList:
         with (
             app.test_request_context("/datasets"),
             patch.object(DatasetService, "get_datasets", return_value=([], 0)) as get_datasets,
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
-                    return_value=permissions,
-                ),
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
-                    return_value=SimpleNamespace(resource_ids=[]),
-                ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
+                return_value=permissions,
+            ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
+                return_value=SimpleNamespace(resource_ids=[]),
+            ),
             patch.object(ProviderManager, "get_configurations", return_value=MagicMock(get_models=lambda **_: [])),
         ):
             method(api, MagicMock(), "tenant-1", current_user)
@@ -298,14 +298,14 @@ class TestDatasetList:
         with (
             app.test_request_context("/datasets"),
             patch.object(DatasetService, "get_datasets", return_value=([], 0)) as get_datasets,
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
-                    return_value=permissions,
-                ),
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
-                    return_value=SimpleNamespace(unrestricted=True, resource_ids=[]),
-                ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
+                return_value=permissions,
+            ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
+                return_value=SimpleNamespace(unrestricted=True, resource_ids=[]),
+            ),
             patch.object(ProviderManager, "get_configurations", return_value=MagicMock(get_models=lambda **_: [])),
         ):
             method(api, MagicMock(), "tenant-1", current_user)
@@ -324,14 +324,14 @@ class TestDatasetList:
         with (
             app.test_request_context("/datasets"),
             patch.object(DatasetService, "get_datasets", return_value=([], 0)) as get_datasets,
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
-                    return_value=permissions,
-                ),
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
-                    return_value=SimpleNamespace(resource_ids=["dataset-whitelist-only"]),
-                ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
+                return_value=permissions,
+            ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
+                return_value=SimpleNamespace(resource_ids=["dataset-whitelist-only"]),
+            ),
             patch.object(ProviderManager, "get_configurations", return_value=MagicMock(get_models=lambda **_: [])),
         ):
             method(api, MagicMock(), "tenant-1", current_user)
@@ -364,14 +364,14 @@ class TestDatasetList:
         with (
             app.test_request_context("/datasets"),
             patch.object(DatasetService, "get_datasets", return_value=([], 0)) as get_datasets,
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
-                    return_value=permissions,
-                ),
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
-                    return_value=SimpleNamespace(resource_ids=["dataset-whitelist-only"]),
-                ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
+                return_value=permissions,
+            ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
+                return_value=SimpleNamespace(resource_ids=["dataset-whitelist-only"]),
+            ),
             patch.object(ProviderManager, "get_configurations", return_value=MagicMock(get_models=lambda **_: [])),
         ):
             method(api, MagicMock(), "tenant-1", current_user)
@@ -389,14 +389,14 @@ class TestDatasetList:
         with (
             app.test_request_context("/datasets?ids=dataset-1"),
             patch.object(DatasetService, "get_datasets_by_ids", return_value=([], 0)) as get_datasets_by_ids,
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
-                    return_value=permissions,
-                ),
-                patch(
-                    "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
-                    return_value=SimpleNamespace(resource_ids=[]),
-                ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.MyPermissions.get",
+                return_value=permissions,
+            ),
+            patch(
+                "controllers.console.datasets.datasets.enterprise_rbac_service.RBACService.DatasetAccess.whitelist_resources",
+                return_value=SimpleNamespace(resource_ids=[]),
+            ),
             patch.object(ProviderManager, "get_configurations", return_value=MagicMock(get_models=lambda **_: [])),
         ):
             method(api, MagicMock(), "tenant-1", current_user)

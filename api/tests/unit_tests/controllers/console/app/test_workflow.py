@@ -885,8 +885,9 @@ def test_trigger_run_loads_draft_with_request_session(
     app_model = SimpleNamespace(id="app-1")
     handler = inspect.unwrap(resource.post)
 
-    with app.test_request_context("/", method="POST", json=payload), pytest.raises(
-        ValueError, match="Workflow not found"
+    with (
+        app.test_request_context("/", method="POST", json=payload),
+        pytest.raises(ValueError, match="Workflow not found"),
     ):
         handler(
             resource(),
