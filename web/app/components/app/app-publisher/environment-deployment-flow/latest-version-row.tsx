@@ -18,6 +18,15 @@ export function PublisherLatestVersionRow({
   onShowAllVersions: () => void
 }) {
   const { t } = useTranslation()
+  const latestLabel = t(($) => $['overview.chip.latest'], { ns: 'deployments' })
+  const latestVersionLabel = isDeploying
+    ? deployingVersionName
+      ? t(($) => $['studio.publisher.deployingVersion'], {
+          ns: 'deployments',
+          version: deployingVersionName,
+        })
+      : t(($) => $['deployDrawer.deploying'], { ns: 'deployments' })
+    : `${latestLabel}${latestVersion ? `: ${latestVersion.name}` : ''}`
 
   return (
     <div className="flex items-center gap-1 py-0.5 pr-0.5 pl-1">
@@ -30,21 +39,13 @@ export function PublisherLatestVersionRow({
             ? 'system-xs-medium text-text-accent'
             : 'system-xs-regular text-text-tertiary',
         )}
+        title={latestVersionLabel}
       >
         {isDeploying ? (
-          deployingVersionName ? (
-            t(($) => $['studio.publisher.deployingVersion'], {
-              ns: 'deployments',
-              version: deployingVersionName,
-            })
-          ) : (
-            t(($) => $['deployDrawer.deploying'], { ns: 'deployments' })
-          )
+          latestVersionLabel
         ) : (
           <>
-            <span className="capitalize">
-              {t(($) => $['overview.chip.latest'], { ns: 'deployments' })}
-            </span>
+            <span className="capitalize">{latestLabel}</span>
             {latestVersion ? `: ${latestVersion.name}` : ''}
           </>
         )}
