@@ -17,6 +17,7 @@ from models.enums import ConversationFromSource
 from models.model import App, AppMode, AppModelConfig, Conversation, Message
 from tests.unit_tests.config_override import apply_config_overrides
 
+
 def _app() -> App:
     return App(
         id="app1",
@@ -27,7 +28,6 @@ def _app() -> App:
         enable_site=False,
         enable_api=False,
     )
-
 
 
 def _account() -> Account:
