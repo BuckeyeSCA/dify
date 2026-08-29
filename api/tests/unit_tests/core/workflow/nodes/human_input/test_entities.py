@@ -52,13 +52,12 @@ from core.workflow.nodes.human_input.enums import (
     ValueSourceType,
 )
 from core.workflow.system_variables import build_system_variables
-from graphon.entities import GraphInitParams
 from graphon.file import File, FileTransferMethod, FileType
 from graphon.node_events import PauseRequestedEvent
 from graphon.node_events.node import StreamCompletedEvent
 from graphon.nodes.human_input.human_input_node import HumanInputNode
 from graphon.nodes.protocols import FileReferenceFactoryProtocol
-from graphon.runtime import GraphRuntimeState, VariablePool
+from graphon.runtime import InitParams, RuntimeState, VariablePool
 from graphon.variables.segments import ArrayFileSegment, FileSegment, StringSegment
 from libs.datetime_utils import naive_utc_now
 
@@ -172,8 +171,8 @@ def _build_human_input_node(
     *,
     node_id: str,
     node_data: HumanInputNodeData | Mapping[str, Any],
-    graph_init_params: GraphInitParams,
-    graph_runtime_state: GraphRuntimeState,
+    init_params: InitParams,
+    runtime_state: RuntimeState,
     runtime: DifyHumanInputNodeRuntime,
 ) -> HumanInputNode:
     typed_node_data = (
@@ -190,8 +189,8 @@ def _build_human_input_node(
     return HumanInputNode(
         node_id=node_id,
         data=typed_node_data,
-        graph_init_params=graph_init_params,
-        graph_runtime_state=graph_runtime_state,
+        init_params=init_params,
+        runtime_state=runtime_state,
         hitl_callback=callback,
     )
 
@@ -479,8 +478,8 @@ class TestHumanInputNodeVariableResolution:
             conversation_variables=[],
         )
         variable_pool.add(("start", "name"), "Jane Doe")
-        runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
-        graph_init_params = GraphInitParams(
+        runtime_state = RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0)
+        graph_init_params = InitParams(
             workflow_id="workflow",
             graph_config={"nodes": [], "edges": []},
             run_context={
@@ -527,8 +526,8 @@ class TestHumanInputNodeVariableResolution:
         node = _build_human_input_node(
             node_id=config["id"],
             node_data=config["data"],
-            graph_init_params=graph_init_params,
-            graph_runtime_state=runtime_state,
+            init_params=graph_init_params,
+            runtime_state=runtime_state,
             runtime=runtime,
         )
 
@@ -554,8 +553,8 @@ class TestHumanInputNodeVariableResolution:
             user_inputs={},
             conversation_variables=[],
         )
-        runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
-        graph_init_params = GraphInitParams(
+        runtime_state = RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0)
+        graph_init_params = InitParams(
             workflow_id="workflow",
             graph_config={"nodes": [], "edges": []},
             run_context={
@@ -593,8 +592,8 @@ class TestHumanInputNodeVariableResolution:
         node = _build_human_input_node(
             node_id=config["id"],
             node_data=config["data"],
-            graph_init_params=graph_init_params,
-            graph_runtime_state=runtime_state,
+            init_params=graph_init_params,
+            runtime_state=runtime_state,
             runtime=runtime,
         )
 
@@ -615,8 +614,8 @@ class TestHumanInputNodeVariableResolution:
             user_inputs={},
             conversation_variables=[],
         )
-        runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
-        graph_init_params = GraphInitParams(
+        runtime_state = RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0)
+        graph_init_params = InitParams(
             workflow_id="workflow",
             graph_config={"nodes": [], "edges": []},
             run_context={
@@ -658,8 +657,8 @@ class TestHumanInputNodeVariableResolution:
         node = _build_human_input_node(
             node_id=config["id"],
             node_data=config["data"],
-            graph_init_params=graph_init_params,
-            graph_runtime_state=runtime_state,
+            init_params=graph_init_params,
+            runtime_state=runtime_state,
             runtime=runtime,
         )
 
@@ -681,8 +680,8 @@ class TestHumanInputNodeVariableResolution:
             user_inputs={},
             conversation_variables=[],
         )
-        runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
-        graph_init_params = GraphInitParams(
+        runtime_state = RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0)
+        graph_init_params = InitParams(
             workflow_id="workflow",
             graph_config={"nodes": [], "edges": []},
             run_context={
@@ -734,8 +733,8 @@ class TestHumanInputNodeVariableResolution:
         node = _build_human_input_node(
             node_id=config["id"],
             node_data=config["data"],
-            graph_init_params=graph_init_params,
-            graph_runtime_state=runtime_state,
+            init_params=graph_init_params,
+            runtime_state=runtime_state,
             runtime=runtime,
         )
 
@@ -800,8 +799,8 @@ class TestHumanInputNodeRenderedContent:
             user_inputs={},
             conversation_variables=[],
         )
-        runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
-        graph_init_params = GraphInitParams(
+        runtime_state = RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0)
+        graph_init_params = InitParams(
             workflow_id="workflow",
             graph_config={"nodes": [], "edges": []},
             run_context={
@@ -830,8 +829,8 @@ class TestHumanInputNodeRenderedContent:
         node = _build_human_input_node(
             node_id=config["id"],
             node_data=config["data"],
-            graph_init_params=graph_init_params,
-            graph_runtime_state=runtime_state,
+            init_params=graph_init_params,
+            runtime_state=runtime_state,
             runtime=runtime,
         )
 
@@ -862,8 +861,8 @@ class TestHumanInputNodeRenderedContent:
             user_inputs={},
             conversation_variables=[],
         )
-        runtime_state = GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
-        graph_init_params = GraphInitParams(
+        runtime_state = RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0)
+        graph_init_params = InitParams(
             workflow_id="workflow",
             graph_config={"nodes": [], "edges": []},
             run_context={
@@ -903,8 +902,8 @@ class TestHumanInputNodeRenderedContent:
         node = _build_human_input_node(
             node_id=config["id"],
             node_data=config["data"],
-            graph_init_params=graph_init_params,
-            graph_runtime_state=runtime_state,
+            init_params=graph_init_params,
+            runtime_state=runtime_state,
             runtime=runtime,
         )
 

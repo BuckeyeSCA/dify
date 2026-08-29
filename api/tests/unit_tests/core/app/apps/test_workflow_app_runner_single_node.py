@@ -13,7 +13,7 @@ from core.app.entities.app_invoke_entities import InvokeFrom, WorkflowAppGenerat
 from core.credit_usage import CreditUsageAppType
 from core.workflow.system_variables import default_system_variables
 from graphon.entities.graph_config import NodeConfigDictAdapter
-from graphon.runtime import GraphRuntimeState, VariablePool
+from graphon.runtime import RuntimeState, VariablePool
 from models.model import AppMode
 from models.workflow import Workflow, WorkflowKind
 
@@ -25,7 +25,11 @@ def _make_graph_state():
         environment_variables=[],
         conversation_variables=[],
     )
-    return MagicMock(), variable_pool, GraphRuntimeState(variable_pool=variable_pool, start_at=0.0)
+    return (
+        MagicMock(),
+        variable_pool,
+        RuntimeState(workflow_id="test-workflow", variable_pool=variable_pool, start_at=0.0),
+    )
 
 
 @pytest.mark.parametrize(
@@ -77,6 +81,7 @@ def test_run_uses_single_node_execution_branch(
         system_user_id="system-user",
         workflow_execution_repository=MagicMock(),
         workflow_node_execution_repository=MagicMock(),
+        workflow_tool_source_repository=MagicMock(),
     )
 
     graph, variable_pool, graph_runtime_state = _make_graph_state()
@@ -191,7 +196,7 @@ def test_run_adds_inputs_with_snippet_compatible_start_aliases() -> None:
     app_generate_entity.invoke_from = InvokeFrom.SERVICE_API
     app_generate_entity.workflow_execution_id = "execution-id"
     app_generate_entity.task_id = "task-id"
-    app_generate_entity.call_depth = 0
+    app_generate_entity.call_depth = 4
     app_generate_entity.trace_manager = None
     app_generate_entity.extras = {}
     app_generate_entity.single_iteration_run = None
@@ -216,6 +221,7 @@ def test_run_adds_inputs_with_snippet_compatible_start_aliases() -> None:
         system_user_id="system-user",
         workflow_execution_repository=MagicMock(),
         workflow_node_execution_repository=MagicMock(),
+        workflow_tool_source_repository=MagicMock(),
     )
 
     mock_workflow_entry = MagicMock()
@@ -235,7 +241,7 @@ def test_run_adds_inputs_with_snippet_compatible_start_aliases() -> None:
             "core.app.apps.workflow.app_runner.get_compatible_start_aliases", return_value=("legacy-start",)
         ) as aliases,
         patch("core.app.apps.workflow.app_runner.add_node_inputs_to_pool") as add_inputs,
-        patch.object(runner, "_init_graph", return_value=MagicMock()),
+        patch.object(runner, "_init_graph", return_value=MagicMock()) as init_graph,
     ):
         runner.run()
 
@@ -244,3 +250,4 @@ def test_run_adds_inputs_with_snippet_compatible_start_aliases() -> None:
     assert add_inputs.call_args.kwargs["node_id"] == "root-node"
     assert add_inputs.call_args.kwargs["inputs"] == {"question": "hello"}
     assert add_inputs.call_args.kwargs["aliases"] == ("legacy-start",)
+    assert init_graph.call_args.kwargs["call_depth"] == 4
