@@ -188,7 +188,7 @@ storage = [
     "esdk-obs-python==3.25.8",
     "google-cloud-storage==2.16.0",
     "opendal~=0.46.0",
-    "oss2==2.18.5",
+    "oss2==2.19.1",
     "supabase~=2.18.1",
     "tos~=2.9.0",
 ]
