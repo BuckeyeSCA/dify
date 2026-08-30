@@ -63,7 +63,7 @@ dependencies = [
     "opentelemetry-util-http==0.48b0",
     "pandas[excel,output-formatting,performance]~=2.2.2",
     "psycogreen~=1.0.2",
-    "psycopg2-binary~=2.9.6",
+    "psycopg2-binary~=2.9.12",
     "pycryptodome==3.19.1",
     "pydantic~=2.11.4",
     "pydantic-extra-types~=2.10.3",
