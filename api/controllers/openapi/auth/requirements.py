@@ -1,0 +1,246 @@
+"""Self-contained authorization requirements.
+
+Requirements are process-lifetime singletons: built once at import, shared by
+every request and every thread. Config belongs in `__init__`, and `run` must
+neither cache nor mutate — a cache here would outlive the fact it recorded.
+Per-request caching belongs in `loaders.py`, which stores into `Context`.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
+from enum import IntEnum
+from typing import ClassVar, override
+
+from flask import request
+from sqlalchemy.orm import Session
+from werkzeug.exceptions import Forbidden, NotFound
+
+from configs import dify_config
+from controllers.common.wraps import enforce_rbac_access
+from controllers.openapi._audit import emit_wrong_surface
+from controllers.openapi.auth.context import Context
+from controllers.openapi.auth.data import CallerKind
+from controllers.openapi.auth.loaders import load_app, load_caller, load_workspace, load_workspace_role
+from controllers.openapi.auth.subjects import Subject
+from core.rbac import RBACPermission, RBACResourceScope
+from enums import DeploymentEdition
+from libs.oauth_bearer import Scope
+from models.account import TenantAccountRole
+from services.enterprise.enterprise_service import EnterpriseService, WebAppAccessMode
+from services.entities.feature_entities import LicenseStatus
+from services.feature_service import FeatureService
+from services.oauth_device_flow import token_belongs_to_subject
+
+_DEAD_LICENSE_STATUSES = frozenset({LicenseStatus.INACTIVE, LicenseStatus.EXPIRED, LicenseStatus.LOST})
+
+
+class Rank(IntEnum):
+    """Three bands, coarsest first. Ties fall back to declaration order —
+    endpoint-declared ahead of pipeline-fixed — so `Pipeline.run`'s sort stays
+    stable rather than needing every requirement in its own band.
+    """
+
+    FIRST = 0  # reject the caller before anything touches data
+    EARLY = 10  # must precede permission checks
+    NORMAL = 20  # default - declared order decides
+
+
+class Requirement(ABC):
+    rank: ClassVar[Rank] = Rank.NORMAL
+
+    @abstractmethod
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None: ...
+
+
+class SubjectCheck(Requirement):
+    rank = Rank.FIRST
+
+    def __init__(self, *, allowed: Sequence[type[Subject]]) -> None:
+        self.allowed = tuple(allowed)
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if isinstance(subject, self.allowed):
+            return
+        emit_wrong_surface(
+            subject_type=subject.subject_type.value,
+            attempted_path=request.path,
+            client_id=subject.client_id,
+            token_id=str(subject.token_id) if subject.token_id else None,
+        )
+        raise Forbidden("unsupported_token_type")
+
+
+def assert_license_valid() -> None:
+    """Shared by the router's endpoint-level gate, which has to answer before
+    `extract_bearer`, and by `ExternalSsoPipeline`'s own gate. One function, so
+    the two cannot drift apart.
+    """
+    if FeatureService.get_system_features().license.status in _DEAD_LICENSE_STATUSES:
+        raise Forbidden("license_invalid")
+
+
+class CheckAppApiEnabled(Requirement):
+    rank = Rank.EARLY
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if not load_app(ctx).enable_api:
+            raise Forbidden("service_api_disabled")
+
+
+class RequireWorkspaceMembership(Requirement):
+    """Resolving the role *is* the check: `load_workspace_role` 404s a non-member.
+
+    Which workspace that is follows from the route — the app's on an app-scoped
+    one, the path or query parameter otherwise — so this one requirement serves
+    both. It cannot be inferred and left implicit: `GET /apps` takes its
+    workspace from the query string, and `GET /workspaces/<workspace_id>` has
+    the path parameter but gets no membership check.
+    """
+
+    rank = Rank.EARLY
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if subject.caller_kind is not CallerKind.ACCOUNT:
+            return
+        load_workspace_role(ctx)
+
+
+class TokenScope(Requirement):
+    def __init__(self, scope: Scope) -> None:
+        self.scope = scope
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if Scope.FULL in subject.scopes or self.scope in subject.scopes:
+            return
+        raise Forbidden("insufficient_scope")
+
+
+class RBACScene(Requirement):
+    """One RBAC permission point. Inert wherever RBAC is switched off, which is
+    also what lets the `RoleFloor` beside it take over there.
+    """
+
+    def __init__(
+        self,
+        *,
+        resource_type: RBACResourceScope,
+        scene: RBACPermission,
+        resource_required: bool = True,
+    ) -> None:
+        self.resource_type = resource_type
+        self.scene = scene
+        self.resource_required = resource_required
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if subject.caller_kind is not CallerKind.ACCOUNT:
+            return
+        if not dify_config.RBAC_ENABLED:
+            return
+        enforce_rbac_access(
+            tenant_id=str(load_workspace(ctx).id),
+            account_id=str(subject.account_id),
+            resource_type=self.resource_type,
+            scene=self.scene,
+            resource_required=self.resource_required,
+            path_args=dict(ctx.view_args),
+        )
+
+
+class RoleFloor(Requirement):
+    """The coarse workspace-role gate that predates RBAC.
+
+    `superseded_by` names the `RBACScene` declared beside it on the same route:
+    where RBAC is on, that scene is the authority and this floor stands down
+    rather than double-enforcing. A floor that names nothing applies
+    unconditionally, which is what keeps workspace administration guarded on an
+    RBAC deployment: no scene there has taken the job over.
+    """
+
+    def __init__(
+        self,
+        roles: frozenset[TenantAccountRole],
+        *,
+        superseded_by: RBACPermission | None = None,
+    ) -> None:
+        self.roles = roles
+        self.superseded_by = superseded_by
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if subject.caller_kind is not CallerKind.ACCOUNT:
+            return
+        if dify_config.RBAC_ENABLED and self.superseded_by is not None:
+            return
+        if load_workspace_role(ctx) not in self.roles:
+            raise Forbidden("insufficient workspace role")
+
+
+class CheckSessionOwnership(Requirement):
+    """Authorises a named session against the caller's own tokens.
+
+    A token id belonging to another subject answers 404, not 403, exactly like a
+    token id that does not exist — a 403 would confirm the id, letting a caller
+    enumerate session ids across subjects.
+    """
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        session_id = ctx.view_args["session_id"]
+        if not token_belongs_to_subject(session_id, subject.auth, session=session):
+            raise NotFound("session not found")
+
+
+class RequireWebappAccess(Requirement):
+    """Run-scope comes from the declaration site, so it is not re-checked here.
+
+    The ACL is gated on `webapp_auth.enabled` and the private-app check is not:
+    the asymmetry is deliberate, not an oversight.
+    """
+
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if dify_config.DEPLOYMENT_EDITION != DeploymentEdition.ENTERPRISE:
+            return
+        access_mode = self._access_mode(str(load_app(ctx).id))
+        if FeatureService.get_system_features().webapp_auth.enabled:
+            self._assert_mode_allowed(subject, access_mode)
+        if access_mode == WebAppAccessMode.PRIVATE:
+            self._assert_private_app_permission(subject, ctx, session)
+
+    def _access_mode(self, app_id: str) -> WebAppAccessMode | None:
+        try:
+            settings = EnterpriseService.WebAppAuth.get_app_access_mode_by_id(app_id=app_id)
+            if settings is None:
+                return None
+            return WebAppAccessMode(settings.access_mode)
+        except ValueError:
+            return None
+
+    def _assert_mode_allowed(self, subject: Subject, access_mode: WebAppAccessMode | None) -> None:
+        if access_mode is None:
+            raise Forbidden("app or access mode not loaded")
+        if access_mode not in subject.webapp_modes:
+            raise Forbidden("subject_not_allowed_for_access_mode")
+
+    def _assert_private_app_permission(self, subject: Subject, ctx: Context, session: Session) -> None:
+        user_id = subject.webapp_user_id(session)
+        if user_id is None:
+            raise Forbidden("cannot resolve user for private app check")
+        app_id = load_app(ctx).id
+        if not EnterpriseService.WebAppAuth.is_user_allowed_to_access_webapp(user_id=user_id, app_id=app_id):
+            raise Forbidden("user_not_allowed_for_private_app")
+
+
+class ResolveCaller(Requirement):
+    @override
+    def run(self, subject: Subject, ctx: Context, session: Session) -> None:
+        if not subject.mounts_caller(ctx):
+            return
+        load_caller(ctx)
