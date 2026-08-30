@@ -219,7 +219,7 @@ function createFlowQueryClient(environmentId: string, environmentInUse = false) 
     queryClient.setQueryDefaults(deploymentOptionsQuery.queryKey, { staleTime: Infinity })
     queryClient.setQueryData(deploymentOptionsQuery.queryKey, {
       credential_slots: [],
-      environment_variable_slots: [],
+      environment_variable_groups: [],
     })
   })
 
@@ -288,7 +288,13 @@ function seedPublishedWorkflowQueries(queryClient: QueryClient) {
 
 function renderFlow(
   deployment = createDeployment(),
-  { isDeploymentError = false }: { isDeploymentError?: boolean } = {},
+  {
+    isDeploymentError = false,
+    onConfigurationOpenChange = vi.fn(),
+  }: {
+    isDeploymentError?: boolean
+    onConfigurationOpenChange?: (open: boolean) => void
+  } = {},
 ) {
   const queryClient = createFlowQueryClient(deployment.environment.id)
 
@@ -303,6 +309,7 @@ function renderFlow(
       isDeploymentError={isDeploymentError}
       isDeploymentLoading={false}
       latestVersion={latestVersion}
+      onConfigurationOpenChange={onConfigurationOpenChange}
       onGoToPublish={vi.fn()}
     />,
     { queryClient },
@@ -456,11 +463,30 @@ async function expectDeploymentRequest(
   )
   expect(await deployRequest.json()).toEqual({
     credentials: [],
-    environment_variables: [],
+    environment_variable_groups: [],
   })
 }
 
 describe('PublisherEnvironmentFlow', () => {
+  it('shows the shared loading state while deployment details load', () => {
+    render(
+      <PublisherEnvironmentFlow
+        appId="app-1"
+        environmentId="development"
+        environmentName="Development"
+        environmentTabs={<div>Environment tabs</div>}
+        isEnvironmentInUse={false}
+        isDeploymentError={false}
+        isDeploymentLoading
+        latestVersion={null}
+        onGoToPublish={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Environment tabs')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'appApi.loading' })).toBeInTheDocument()
+  })
+
   it('formats deployed_at as a Unix timestamp in seconds', () => {
     const deployment = createDeployment()
     const deployedAt = deployment.deployment?.deployed_at
@@ -547,6 +573,7 @@ describe('PublisherEnvironmentFlow', () => {
     await user.click(screen.getByRole('button', { name: 'All versions' }))
 
     expect(screen.getByRole('heading', { name: 'Deploy to Staging' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Deploy to Staging' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Back' }))
 
@@ -555,16 +582,14 @@ describe('PublisherEnvironmentFlow', () => {
   })
 
   it.each([
-    DeploymentStatus.DEPLOYMENT_STATUS_DEPLOYING,
-    DeploymentStatus.DEPLOYMENT_STATUS_UNDEPLOYING,
+    DeploymentStatus.DEPLOYMENT_STATUS_STARTING,
+    DeploymentStatus.DEPLOYMENT_STATUS_STOPPING,
   ])(
     'disables deployment triggers but keeps environment navigation available while the status is %s',
     (status) => {
       renderFlow(createDeployment({ deployed: false, status }))
 
-      const deployButtonName =
-        status === DeploymentStatus.DEPLOYMENT_STATUS_DEPLOYING ? 'Deploying...' : 'Deploy latest'
-      expect(screen.getByRole('button', { name: deployButtonName })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Deploy latest' })).toBeDisabled()
       expect(screen.getByRole('button', { name: 'All versions' })).toBeDisabled()
       expect(screen.getByRole('link', { name: 'Access Point' })).toHaveAttribute(
         'href',
@@ -579,7 +604,7 @@ describe('PublisherEnvironmentFlow', () => {
 
   it('keeps the deployment target and progress controls when a deploying status refresh fails', () => {
     const deployment = createDeployment({
-      status: DeploymentStatus.DEPLOYMENT_STATUS_DEPLOYING,
+      status: DeploymentStatus.DEPLOYMENT_STATUS_RUNNING,
     })
     deployment.deployment!.latest_operation = {
       activity_at: 1_785_456_000,
@@ -623,7 +648,7 @@ describe('PublisherEnvironmentFlow', () => {
 
   it.each([
     DeploymentStatus.DEPLOYMENT_STATUS_UNDEPLOYED,
-    DeploymentStatus.DEPLOYMENT_STATUS_FAILED,
+    DeploymentStatus.DEPLOYMENT_STATUS_ERROR,
   ])('shows the undeployed state when terminal status %s has no current version', (status) => {
     renderFlow(createDeployment({ deployed: false, status }))
 
@@ -644,6 +669,29 @@ describe('PublisherEnvironmentFlow', () => {
     await user.click(screen.getByRole('button', { name: 'Back' }))
 
     expect(screen.getByRole('heading', { name: 'Deploy to Staging' })).toBeInTheDocument()
+  })
+
+  it('reports whether deployment configuration is active', async () => {
+    const user = userEvent.setup()
+    const onConfigurationOpenChange = vi.fn()
+    const view = renderFlow(createDeployment(), { onConfigurationOpenChange })
+
+    await user.click(screen.getByRole('button', { name: 'Deploy latest' }))
+    expect(onConfigurationOpenChange).toHaveBeenLastCalledWith(true)
+
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(onConfigurationOpenChange).toHaveBeenLastCalledWith(false)
+
+    await user.click(screen.getByRole('button', { name: /Release 6/ }))
+    expect(onConfigurationOpenChange).toHaveBeenLastCalledWith(true)
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onConfigurationOpenChange).toHaveBeenLastCalledWith(false)
+
+    await user.click(screen.getByRole('button', { name: 'Deploy latest' }))
+    expect(onConfigurationOpenChange).toHaveBeenLastCalledWith(true)
+    view.unmount()
+    expect(onConfigurationOpenChange).toHaveBeenLastCalledWith(false)
   })
 
   it('hides the environment variables section when deployment options have no slots', async () => {
@@ -674,14 +722,26 @@ describe('PublisherEnvironmentFlow', () => {
       )
     view.queryClient.setQueryData(deploymentOptionsQuery.queryKey, {
       credential_slots: [],
-      environment_variable_slots: [
+      environment_variable_groups: [
         {
-          configured_value: 'production',
-          description: '',
-          has_configured_value: true,
-          has_last_deployed_value: false,
-          key: 'ENVIRONMENT',
-          value_type: EnvVarValueType.ENV_VAR_VALUE_TYPE_STRING,
+          environment_variable_slots: [
+            {
+              configured_value: 'production',
+              description: '',
+              has_configured_value: true,
+              has_last_deployed_value: false,
+              key: 'ENVIRONMENT',
+              value_type: EnvVarValueType.ENV_VAR_VALUE_TYPE_STRING,
+            },
+          ],
+          from_app: {
+            app_id: 'app-1',
+            icon: '💰',
+            icon_background: '#FDF2FA',
+            icon_type: 'emoji',
+            name: 'Finance APP',
+            workflow_id: latestVersion.id,
+          },
         },
       ],
     })

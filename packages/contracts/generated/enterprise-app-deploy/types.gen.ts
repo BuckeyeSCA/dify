@@ -4,6 +4,8 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type GoogleProtobufValue = unknown
+
 export const EnvironmentStatus = {
   ENVIRONMENT_STATUS_UNSPECIFIED: 'ENVIRONMENT_STATUS_UNSPECIFIED',
   ENVIRONMENT_STATUS_PENDING: 'ENVIRONMENT_STATUS_PENDING',
@@ -21,6 +23,7 @@ export const ApplicationInteractionStatus = {
   APPLICATION_INTERACTION_STATUS_FAILED: 'APPLICATION_INTERACTION_STATUS_FAILED',
   APPLICATION_INTERACTION_STATUS_PARTIAL_SUCCEEDED:
     'APPLICATION_INTERACTION_STATUS_PARTIAL_SUCCEEDED',
+  APPLICATION_INTERACTION_STATUS_STOPPED: 'APPLICATION_INTERACTION_STATUS_STOPPED',
 } as const
 
 export type ApplicationInteractionStatus =
@@ -124,14 +127,6 @@ export const EnvironmentBackend = {
 
 export type EnvironmentBackend = (typeof EnvironmentBackend)[keyof typeof EnvironmentBackend]
 
-export const EnvironmentManagedBy = {
-  ENVIRONMENT_MANAGED_BY_UNSPECIFIED: 'ENVIRONMENT_MANAGED_BY_UNSPECIFIED',
-  ENVIRONMENT_MANAGED_BY_SYSTEM: 'ENVIRONMENT_MANAGED_BY_SYSTEM',
-  ENVIRONMENT_MANAGED_BY_USER: 'ENVIRONMENT_MANAGED_BY_USER',
-} as const
-
-export type EnvironmentManagedBy = (typeof EnvironmentManagedBy)[keyof typeof EnvironmentManagedBy]
-
 export const EnvironmentDeployedAppStatus = {
   ENVIRONMENT_DEPLOYED_APP_STATUS_UNSPECIFIED: 'ENVIRONMENT_DEPLOYED_APP_STATUS_UNSPECIFIED',
   ENVIRONMENT_DEPLOYED_APP_STATUS_DEPLOYED: 'ENVIRONMENT_DEPLOYED_APP_STATUS_DEPLOYED',
@@ -146,11 +141,12 @@ export type EnvironmentDeployedAppStatus =
 export const DeploymentStatus = {
   DEPLOYMENT_STATUS_UNSPECIFIED: 'DEPLOYMENT_STATUS_UNSPECIFIED',
   DEPLOYMENT_STATUS_UNDEPLOYED: 'DEPLOYMENT_STATUS_UNDEPLOYED',
-  DEPLOYMENT_STATUS_DEPLOYING: 'DEPLOYMENT_STATUS_DEPLOYING',
   DEPLOYMENT_STATUS_RUNNING: 'DEPLOYMENT_STATUS_RUNNING',
-  DEPLOYMENT_STATUS_UNDEPLOYING: 'DEPLOYMENT_STATUS_UNDEPLOYING',
-  DEPLOYMENT_STATUS_INVALID: 'DEPLOYMENT_STATUS_INVALID',
-  DEPLOYMENT_STATUS_FAILED: 'DEPLOYMENT_STATUS_FAILED',
+  DEPLOYMENT_STATUS_STARTING: 'DEPLOYMENT_STATUS_STARTING',
+  DEPLOYMENT_STATUS_STOPPING: 'DEPLOYMENT_STATUS_STOPPING',
+  DEPLOYMENT_STATUS_SUSPENDED: 'DEPLOYMENT_STATUS_SUSPENDED',
+  DEPLOYMENT_STATUS_ERROR: 'DEPLOYMENT_STATUS_ERROR',
+  DEPLOYMENT_STATUS_UNKNOWN: 'DEPLOYMENT_STATUS_UNKNOWN',
 } as const
 
 export type DeploymentStatus = (typeof DeploymentStatus)[keyof typeof DeploymentStatus]
@@ -169,6 +165,7 @@ export const EnvVarValueType = {
   ENV_VAR_VALUE_TYPE_STRING: 'ENV_VAR_VALUE_TYPE_STRING',
   ENV_VAR_VALUE_TYPE_NUMBER: 'ENV_VAR_VALUE_TYPE_NUMBER',
   ENV_VAR_VALUE_TYPE_SECRET: 'ENV_VAR_VALUE_TYPE_SECRET',
+  ENV_VAR_VALUE_TYPE_LLM: 'ENV_VAR_VALUE_TYPE_LLM',
 } as const
 
 export type EnvVarValueType = (typeof EnvVarValueType)[keyof typeof EnvVarValueType]
@@ -262,7 +259,7 @@ export type CreateEnvironmentRequest = {
   displayName: string
   description?: string
   mode: EnvironmentMode
-  cpuPool: number
+  cpuPoolMillicores: number
   namespace?: string
   maxMemoryMib?: string
 }
@@ -292,12 +289,7 @@ export type CredentialSlot = {
   last_deployed_credential_id?: string
   icon?: string
   icon_dark?: string
-}
-
-export type DashboardApp = {
-  id: string
-  workspaceId: string
-  displayName: string
+  workflow_as_tool_dependency?: WorkflowAsToolDependency
 }
 
 export type DeleteEnvironmentApiKeyResponse = {
@@ -305,6 +297,15 @@ export type DeleteEnvironmentApiKeyResponse = {
 }
 
 export type DeleteEnvironmentResponse = {
+  [key: string]: unknown
+}
+
+export type DeleteServiceApiConversationRequest = {
+  conversationId: string
+  user: string
+}
+
+export type DeleteServiceApiConversationResponse = {
   [key: string]: unknown
 }
 
@@ -358,8 +359,7 @@ export type Environment = {
   statusMessage: string
   lastError?: Error
   namespace?: string
-  managedBy?: EnvironmentManagedBy
-  cpuPool: number
+  cpuPoolMillicores: number
   createdAt: string
   updatedAt: string
   memory?: RunnerMemory
@@ -412,13 +412,6 @@ export type EnvironmentDeployedAppAttempt = {
   finalizedAt?: string
 }
 
-export type EnvironmentDeployedAppSummary = {
-  total: number
-  deployed: number
-  deploying: number
-  failed: number
-}
-
 export type EnvironmentDeployment = {
   environment: DeploymentEnvironment
   deployment?: EnvironmentDeploymentState
@@ -449,17 +442,17 @@ export type EnvironmentMcpServer = {
 
 export type EnvironmentPoolComposition = {
   topApps?: Array<EnvironmentPoolShare>
-  otherCpu?: number
+  otherCpuMillicores?: number
   otherAppCount?: number
 }
 
 export type EnvironmentPoolShare = {
   app: NamedRef
-  isolatedCpu: number
+  isolatedCpuMillicores: number
 }
 
 export type EnvironmentPoolUsage = {
-  occupiedCpu: number
+  occupiedCpuMillicores: number
   appCount: number
 }
 
@@ -478,10 +471,16 @@ export type EnvironmentTrigger = {
   [key: string]: unknown
 }
 
+export type EnvironmentVariableGroup = {
+  from_app?: WorkflowReference
+  from_workflow_as_tool?: WorkflowAsToolSource
+  environment_variable_slots: Array<EnvironmentVariableSlot>
+}
+
 export type EnvironmentVariableInput = {
   key: string
   value_source: EnvVarValueSource
-  value?: string
+  value?: GoogleProtobufValue
 }
 
 export type EnvironmentVariableSlot = {
@@ -490,8 +489,8 @@ export type EnvironmentVariableSlot = {
   description: string
   has_configured_value: boolean
   has_last_deployed_value: boolean
-  configured_value?: string
-  last_deployed_value?: string
+  configured_value?: GoogleProtobufValue
+  last_deployed_value?: GoogleProtobufValue
 }
 
 export type EnvironmentWebAppAccessModeUpdate = {
@@ -580,6 +579,8 @@ export type Error = {
     | 'APPDEPLOY_APPLICATION_UNAVAILABLE'
     | 'APPDEPLOY_TARGET_ENVIRONMENT_REMOVED'
     | 'APPDEPLOY_VERSION_UNAVAILABLE'
+    | 'APPDEPLOY_CONVERSATION_NOT_FOUND'
+    | 'APPDEPLOY_CHAT_MESSAGE_NOT_FOUND'
     | 'APPDEPLOY_CONFLICT'
     | 'APPDEPLOY_DEPLOYMENT_IN_PROGRESS'
     | 'APPDEPLOY_ALREADY_UNDEPLOYED'
@@ -618,10 +619,13 @@ export type Error = {
     | 'APPDEPLOY_ENVIRONMENT_CPU_POOL_EXHAUSTED'
     | 'APPDEPLOY_RESOURCE_NOT_APPLICABLE_FOR_MODE'
     | 'APPDEPLOY_ENVIRONMENT_CPU_POOL_BELOW_ALLOCATED'
+    | 'APPDEPLOY_CHAT_CONTEXT_TOO_LARGE'
+    | 'APPDEPLOY_FILE_GRANT_UNAVAILABLE'
     | 'APPDEPLOY_APP_RUNNER_CONTROL_NOT_CONFIGURED'
     | 'APPDEPLOY_RUNTIME_ASSIGNMENT_FAILED'
     | 'APPDEPLOY_REVISION_TIMEOUT'
     | 'APPDEPLOY_INTERNAL_ERROR'
+    | 'APPDEPLOY_RECEIPT_RETRY'
     | 'APPDEPLOY_ENVIRONMENT_BOOTSTRAP_AUTH_REJECTED'
     | 'APPDEPLOY_ENVIRONMENT_BOOTSTRAP_NAMESPACE_MISSING'
     | 'APPDEPLOY_ENVIRONMENT_BOOTSTRAP_INSUFFICIENT_RBAC'
@@ -673,12 +677,17 @@ export type GetWebAppAccessModeResponse = {
   accessMode?: string
 }
 
+export type GetWebAppLoginStatusResponse = {
+  logged_in?: boolean
+  app_logged_in?: boolean
+}
+
 export type GetWebAppPermissionResponse = {
   result?: boolean
 }
 
 export type GetWorkflowDeploymentOptionsResponse = {
-  environment_variable_slots: Array<EnvironmentVariableSlot>
+  environment_variable_groups: Array<EnvironmentVariableGroup>
   credential_slots: Array<CredentialSlot>
 }
 
@@ -688,11 +697,6 @@ export type ListAppEnvironmentsResponse = {
 
 export type ListApplicationInteractionsResponse = {
   data: Array<ApplicationInteraction>
-  pagination: Pagination
-}
-
-export type ListAppsResponse = {
-  data: Array<DashboardApp>
   pagination: Pagination
 }
 
@@ -707,7 +711,6 @@ export type ListEnvironmentApiKeysResponse = {
 
 export type ListEnvironmentDeployedAppsResponse = {
   data: Array<EnvironmentDeployedApp>
-  summary: EnvironmentDeployedAppSummary
   pagination: Pagination
 }
 
@@ -724,9 +727,32 @@ export type ListEnvironmentsResponse = {
   pagination: Pagination
 }
 
+export type ListOperationAppsResponse = {
+  data: Array<OperationApp>
+  pagination: Pagination
+}
+
+export type MintServiceApiFileGrantRequest = {
+  tenantId?: string
+  appId?: string
+  environmentId?: string
+  user?: string
+}
+
+export type MintServiceApiFileGrantResponse = {
+  grant?: string
+  expiresAt?: string
+}
+
 export type NamedRef = {
   id: string
   displayName: string
+}
+
+export type OperationApp = {
+  id?: string
+  workspaceId?: string
+  displayName?: string
 }
 
 export type Operator = {
@@ -744,6 +770,20 @@ export type PrepareAppDeletionRequest = {
   appId?: string
 }
 
+export type RenameServiceApiConversationRequest = {
+  conversationId: string
+  user: string
+  name?: string
+  autoGenerate?: boolean
+}
+
+export type RenameWebAppConversationRequest = {
+  appCode: string
+  conversationId: string
+  name?: string
+  autoGenerate?: boolean
+}
+
 export type ResolveApiTokenRouteRequest = {
   token?: string
 }
@@ -753,17 +793,14 @@ export type ResolveApiTokenRouteResponse = {
   namespace?: string
   serviceName?: string
   servicePort?: number
-  environmentStatus?: EnvironmentStatus
   appId?: string
   tenantId?: string
   deploymentId?: string
   servingRevisionId?: string
-  deploymentStatus?: DeploymentStatus
-  revoked?: boolean
-  unavailableReason?: string
   targetKind?: RouteTargetKind
   directUpstream?: string
-  deploymentGeneration?: string
+  assignmentGeneration?: string
+  decision?: string
 }
 
 export type ResolveWebAppRouteRequest = {
@@ -777,18 +814,18 @@ export type ResolveWebAppRouteResponse = {
   namespace?: string
   serviceName?: string
   servicePort?: number
-  environmentStatus?: EnvironmentStatus
   appId?: string
   tenantId?: string
   deploymentId?: string
   servingRevisionId?: string
-  deploymentStatus?: DeploymentStatus
-  unavailableReason?: string
   targetKind?: RouteTargetKind
   directUpstream?: string
-  deploymentGeneration?: string
-  endUserId?: string
-  authType?: string
+  assignmentGeneration?: string
+  userId?: string
+  userFrom?: string
+  userAuthType?: string
+  fileGrant?: string
+  fileGrantExpiresAt?: string
 }
 
 export type RetryEnvironmentBootstrapRequest = {
@@ -806,7 +843,7 @@ export type RunnerMemory = {
 }
 
 export type RunnerSizing = {
-  isolatedCpu: number
+  isolatedCpuMillicores: number
   memory: RunnerMemory
 }
 
@@ -818,7 +855,12 @@ export type SimpleAccount = {
 
 export type SourceVersionDeployment = {
   sourceVersionId?: string
-  environments?: Array<WorkflowDeploymentEnvironment>
+  environments?: Array<SourceVersionDeploymentEnvironment>
+}
+
+export type SourceVersionDeploymentEnvironment = {
+  id?: string
+  name?: string
 }
 
 export type TestConnectionRequest = {
@@ -843,6 +885,7 @@ export type UnsupportedNode = {
   type: string
   title: string
   provider?: UnsupportedNodeProvider
+  workflow_as_tool_dependency?: WorkflowAsToolDependency
 }
 
 export type UnsupportedNodeProvider = {
@@ -855,15 +898,15 @@ export type UnsupportedNodeProvider = {
 export type UpdateEnvironmentDeployedAppResourcesRequest = {
   environmentId: string
   deploymentId: string
-  isolatedCpu: number
+  isolatedCpuMillicores: number
   maxMemoryMib?: string
 }
 
 export type UpdateEnvironmentDeployedAppResourcesResponse = {
   deploymentId: string
-  isolatedCpu: number
-  allocatedCpuCount: number
-  poolCpuCount: number
+  isolatedCpuMillicores: number
+  allocatedCpuMillicores: number
+  poolCpuMillicores: number
   memory: RunnerMemory
 }
 
@@ -871,7 +914,7 @@ export type UpdateEnvironmentRequest = {
   environmentId?: string
   displayName?: string
   description?: string
-  cpuPool?: number
+  cpuPoolMillicores?: number
   maxMemoryMib?: string
 }
 
@@ -879,14 +922,44 @@ export type UpdateEnvironmentResponse = {
   environment: Environment
 }
 
-export type WorkflowDeploymentEnvironment = {
-  id?: string
-  name?: string
+export type UpdateServiceApiConversationVariableRequest = {
+  conversationId: string
+  variableId: string
+  user: string
+  value: GoogleProtobufValue
+}
+
+export type WorkflowAsToolDependency = {
+  paths: Array<WorkflowPath>
+}
+
+export type WorkflowAsToolSource = {
+  workflow: WorkflowReference
+  paths: Array<WorkflowPath>
 }
 
 export type WorkflowDeploymentInput = {
-  environment_variables?: Array<EnvironmentVariableInput>
+  environment_variable_groups: Array<WorkflowEnvironmentVariableInputGroup>
   credentials?: Array<CredentialSelectionInput>
+}
+
+export type WorkflowEnvironmentVariableInputGroup = {
+  workflow_id: string
+  environment_variables: Array<EnvironmentVariableInput>
+}
+
+export type WorkflowPath = {
+  workflows: Array<WorkflowReference>
+}
+
+export type WorkflowReference = {
+  app_id: string
+  workflow_id: string
+  name: string
+  icon: string
+  icon_background: string
+  icon_type: string
+  icon_url?: string
 }
 
 export type WorkflowVersion = {
@@ -898,7 +971,6 @@ export type WorkflowVersion = {
   created_at?: number
   created_by?: SimpleAccount
   dsl_hash?: string
-  deleted?: boolean
 }
 
 export type Pagination = {
@@ -920,6 +992,10 @@ export type DeleteEnvironmentResponseWritable = {
   [key: string]: unknown
 }
 
+export type DeleteServiceApiConversationResponseWritable = {
+  [key: string]: unknown
+}
+
 export type EnvironmentWritable = {
   id: string
   displayName: string
@@ -930,8 +1006,7 @@ export type EnvironmentWritable = {
   statusMessage: string
   lastError?: Error
   namespace?: string
-  managedBy?: EnvironmentManagedBy
-  cpuPool: number
+  cpuPoolMillicores: number
   createdAt: string
   updatedAt: string
   memory?: RunnerMemoryWritable
@@ -966,7 +1041,6 @@ export type GetEnvironmentResponseWritable = {
 
 export type ListEnvironmentDeployedAppsResponseWritable = {
   data: Array<EnvironmentDeployedAppWritable>
-  summary: EnvironmentDeployedAppSummary
   pagination: Pagination
 }
 
@@ -984,15 +1058,15 @@ export type RunnerMemoryWritable = {
 }
 
 export type RunnerSizingWritable = {
-  isolatedCpu: number
+  isolatedCpuMillicores: number
   memory: RunnerMemoryWritable
 }
 
 export type UpdateEnvironmentDeployedAppResourcesResponseWritable = {
   deploymentId: string
-  isolatedCpu: number
-  allocatedCpuCount: number
-  poolCpuCount: number
+  isolatedCpuMillicores: number
+  allocatedCpuMillicores: number
+  poolCpuMillicores: number
   memory: RunnerMemoryWritable
 }
 

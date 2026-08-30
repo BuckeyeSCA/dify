@@ -150,7 +150,9 @@ const AppDetailLayout: FC<IAppDetailLayoutProps> = (props) => {
       (isAccessConfigPath &&
         (routeAppDetail.mode === AppModeEnum.AGENT || !appACLCapabilities.canAccessConfig)) ||
       (isDeployPath &&
-        (routeAppDetail.mode !== AppModeEnum.WORKFLOW || !appACLCapabilities.canDeploy))
+        ((routeAppDetail.mode !== AppModeEnum.WORKFLOW &&
+          routeAppDetail.mode !== AppModeEnum.ADVANCED_CHAT) ||
+          !appACLCapabilities.canDeploy))
     ) {
       router.replace(
         getRedirectionPath(routeAppDetail, {

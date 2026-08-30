@@ -431,6 +431,8 @@ describe('AppPublisher', () => {
 
     expect(mockUpdateWorkflow).toHaveBeenCalledWith(
       {
+        appId: 'app-1',
+        appMode: AppModeEnum.WORKFLOW,
         url: '/apps/app-1/workflows/workflow-version-5',
         title: 'Release 6',
         releaseNotes: 'Updated notes',
@@ -699,7 +701,7 @@ describe('AppPublisher', () => {
                   marked_name: 'Release 5',
                   version: 'v5',
                 },
-                status: DeploymentStatus.DEPLOYMENT_STATUS_DEPLOYING,
+                status: DeploymentStatus.DEPLOYMENT_STATUS_STARTING,
               },
               environment: {
                 description: '',
